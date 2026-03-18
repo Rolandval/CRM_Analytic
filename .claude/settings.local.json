@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(npm run:*)",
+      "Bash(python3 -c \"import secrets; print\\(secrets.token_hex\\(32\\)\\)\")",
+      "Bash(docker compose:*)",
+      "Bash(sudo docker:*)",
+      "Bash(sudo -S docker compose -f /home/renat/Стільниця/work/CRM_Database/docker-compose.yml up -d --build backend)",
+      "Bash(sudo -S docker compose -f /home/renat/Стільниця/work/CRM_Database/docker-compose.yml logs backend --tail=40)",
+      "Bash(sudo -S docker compose up -d --build backend)",
+      "Bash(sudo -S docker compose logs backend --tail=30)",
+      "Bash(sudo -S docker compose exec backend alembic upgrade head)",
+      "Bash(sudo -S docker compose exec backend alembic current)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(python3 -m json.tool)",
+      "Bash(sudo -S docker compose up -d --build)",
+      "Bash(curl -s http://localhost:8000/api/v1/calls?limit=5)",
+      "Bash(ls /home/renat/Стільниця/work/CRM_Database/frontend/.env*)",
+      "Bash(sudo -S docker compose -f /home/renat/Стільниця/work/CRM_Database/docker-compose.yml build frontend)",
+      "Bash(sudo -S docker compose -f /home/renat/Стільниця/work/CRM_Database/docker-compose.yml up -d frontend)",
+      "Bash(curl -s http://localhost/api/v1/calls?limit=1)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''total:'''', d[''''total'''']\\)\")"
+    ]
+  }
+}
