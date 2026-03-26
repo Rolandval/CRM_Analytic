@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sudo -S docker exec crm_backend chromium --version)",
+      "Bash(sudo -S docker exec crm_backend chromium --headless=new --no-sandbox --disable-dev-shm-usage --dump-dom about:blank)",
+      "Bash(sudo -S docker exec crm_backend bash -c \":*)",
+      "Bash(sudo -S docker exec crm_backend ls /usr/lib/chromium/)",
+      "Bash(curl -s -X POST 'http://0.0.0.0:8668/api/v1/unitalk/analytics/sync/today' -H 'accept: application/json' -d '')",
+      "Bash(sudo -S docker exec -u appuser crm_backend bash -c \":*)",
+      "Bash(sudo -S docker cp /tmp/test_sel.py crm_backend:/tmp/test_sel.py)",
+      "Bash(sudo -S docker cp /tmp/test_selenium.py crm_backend:/tmp/test_selenium.py)",
+      "Bash(sudo -S docker exec -u appuser crm_backend python3 /tmp/test_selenium.py)",
+      "Bash(sudo -S docker exec crm_backend python3 /tmp/test_selenium.py)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(sudo -S docker exec crm_backend bash -c \"ls -la /usr/lib/chromium/chromium && id appuser\")",
+      "Bash(sudo -S docker exec crm_backend stat /usr/lib/chromium/chromium)",
+      "Bash(sudo -S docker exec -u appuser crm_backend bash -c \"touch /tmp/test_appuser && echo ok && python3 /tmp/test_selenium.py; echo exit_code:$?\")",
+      "Bash(sudo -S docker exec crm_backend env)",
+      "Bash(sudo -S docker compose up -d --force-recreate backend)",
+      "Bash(sudo -S docker logs crm_backend --tail=60)",
+      "Bash(sudo -S docker logs crm_backend --tail=50)",
+      "Bash(sudo -S docker logs crm_backend)",
+      "Bash(sudo -S docker cp crm_backend:/tmp/unitalk_table_loaded_1774004582.png /tmp/unitalk_debug.png)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST 'http://0.0.0.0:8668/api/v1/unitalk/analytics/sync/all' -H 'accept: application/json' -d '')",
+      "Bash(sudo -S docker exec crm_backend ls /tmp/unitalk_*.png)",
+      "Bash(sort -t_ -k4 -n)",
+      "Bash(sudo -S docker exec crm_backend ls -lt /tmp/unitalk_*.png)",
+      "Bash(sudo -S docker exec crm_backend ls /tmp/)",
+      "Bash(sudo -S docker cp crm_backend:/tmp/unitalk_table_loaded_1774004664.png /tmp/unitalk_all.png)",
+      "Bash(sudo -S docker exec crm_postgres psql -U \"$POSTGRES_USER:-crm_user\" -d \"$POSTGRES_DB:-crm_db\" -c \"SELECT c.id, ca.conversation_topic, ca.clients_mood FROM call_ai_analytics ca JOIN calls c ON c.id=ca.call_id ORDER BY ca.created_at DESC LIMIT 5;\")"
+    ],
+    "additionalDirectories": [
+      "/home/renat/Стільниця/work/CRM_Database"
+    ]
+  }
+}

@@ -32,8 +32,15 @@ services:
     container_name: crm_backend
     restart: unless-stopped
     env_file: .env
+    shm_size: '2gb'
     ports:
       - "8668:8668"
+    environment:
+      # X11 forwarding — щоб Chrome відкривався на хості (потрібно UNITALK_PARSER_HEADLESS=false в .env)
+      # Перед запуском: xhost +local:docker
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
     depends_on:
       postgres:
         condition: service_healthy

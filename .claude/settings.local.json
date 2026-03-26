@@ -22,7 +22,12 @@
       "Bash(sudo -S docker compose -f /home/renat/Стільниця/work/CRM_Database/docker-compose.yml build frontend)",
       "Bash(sudo -S docker compose -f /home/renat/Стільниця/work/CRM_Database/docker-compose.yml up -d frontend)",
       "Bash(curl -s http://localhost/api/v1/calls?limit=1)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''total:'''', d[''''total'''']\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''total:'''', d[''''total'''']\\)\")",
+      "Bash(docker exec:*)",
+      "Bash(sudo -S docker compose up --build)",
+      "Bash(sudo -S docker compose down)",
+      "Bash(sudo -S docker compose build --no-cache backend)",
+      "Bash(sudo -S docker compose up -d)"
     ]
   }
 }

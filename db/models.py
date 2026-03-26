@@ -201,18 +201,18 @@ class CallAiAnalytic(Base):
     badwords: Mapped[str | None] = Column(Text, nullable=True)
     foul_language: Mapped[str | None] = Column(Text, nullable=True)
 
-    # ── Sentiment / mood ──────────────────────────────────────────────────────
-    clients_mood: Mapped[str | None] = Column(String(50), nullable=True)
-    operators_mood: Mapped[str | None] = Column(String(50), nullable=True)
-    customer_satisfaction: Mapped[str | None] = Column(String(50), nullable=True)
+    # ── Sentiment / mood (free-text — Unitalk returns full sentences) ─────────
+    clients_mood: Mapped[str | None] = Column(Text, nullable=True)
+    operators_mood: Mapped[str | None] = Column(Text, nullable=True)
+    customer_satisfaction: Mapped[str | None] = Column(Text, nullable=True)
 
-    # ── Quality scores (numeric stored as string for flexibility) ─────────────
-    problem_solving_efficiency: Mapped[str | None] = Column(String(20), nullable=True)
-    ability_to_adapt: Mapped[str | None] = Column(String(20), nullable=True)
-    involvement: Mapped[str | None] = Column(String(20), nullable=True)
-    problem_identification: Mapped[str | None] = Column(String(20), nullable=True)
-    clarity_of_communication: Mapped[str | None] = Column(String(20), nullable=True)
-    empathy: Mapped[str | None] = Column(String(20), nullable=True)
-    operator_professionalism: Mapped[str | None] = Column(String(20), nullable=True)
+    # ── Quality scores (numeric string, e.g. "7.4462") ────────────────────────
+    problem_solving_efficiency: Mapped[str | None] = Column(String(30), nullable=True)
+    ability_to_adapt: Mapped[str | None] = Column(String(30), nullable=True)
+    involvement: Mapped[str | None] = Column(String(30), nullable=True)
+    problem_identification: Mapped[str | None] = Column(String(30), nullable=True)
+    clarity_of_communication: Mapped[str | None] = Column(String(30), nullable=True)
+    empathy: Mapped[str | None] = Column(String(30), nullable=True)
+    operator_professionalism: Mapped[str | None] = Column(String(30), nullable=True)
 
     call: Mapped[Call] = relationship("Call", back_populates="ai_analytic")

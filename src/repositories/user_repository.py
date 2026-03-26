@@ -8,6 +8,7 @@ Rules:
 """
 from typing import List, Optional, Tuple
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -41,12 +42,19 @@ class UserRepository:
         return user
 
     async def get_or_create(self, phone_number: str) -> Tuple[User, bool]:
-        """Returns (user, created). Does NOT commit."""
+        """
+        Атомарний INSERT ... ON CONFLICT DO NOTHING + SELECT.
+        Безпечний для конкурентних воркерів (race condition-safe).
+        """
+        stmt = (
+            pg_insert(User)
+            .values(phone_number=phone_number)
+            .on_conflict_do_nothing(index_elements=["phone_number"])
+        )
+        result = await self._s.execute(stmt)
+        created = result.rowcount > 0
         user = await self.get_by_phone(phone_number)
-        if user:
-            return user, False
-        user = await self.create(phone_number)
-        return user, True
+        return user, created
 
     async def update(self, user: User, **fields) -> User:
         for k, v in fields.items():

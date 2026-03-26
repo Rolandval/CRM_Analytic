@@ -16,16 +16,37 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && \
-    rm -rf /var/lib/apt/lists/*
+# libpq5 — PostgreSQL client; chromium + chromedriver — для Selenium-парсера
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    chromium \
+    chromium-driver \
+    fonts-liberation \
+    libnss3 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    libgbm1 \
+    libxrandr2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxi6 \
+    libxtst6 \
+    libxkbcommon0 \
+    libpango-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
 COPY . .
+
+# Вказуємо шляхи до chromium для Selenium (зчитується у UnitalkParser)
+ENV CHROME_BINARY=/usr/lib/chromium/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 # Non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser /app
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8668
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8668", "--workers", "2"]

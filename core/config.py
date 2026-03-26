@@ -55,6 +55,15 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     ai_processing_enabled: bool = False
 
+    # ── Unitalk Web Parser (Selenium) ─────────────────────────────────────────
+    # URL кабінету: https://my.unitalk.cloud (захардкоджено у parser)
+    unitalk_web_username: str = ""        # Email для входу в my.unitalk.cloud
+    unitalk_web_password: str = ""        # Пароль
+    unitalk_parser_headless: bool = True  # False — показувати браузер (debug)
+    unitalk_parser_page_timeout: int = 30
+    unitalk_parser_element_timeout: int = 15
+    unitalk_parser_max_days: int = 30     # кількість днів назад для sync_all
+
 
 @lru_cache
 def get_settings() -> Settings:
