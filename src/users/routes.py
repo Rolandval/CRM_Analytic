@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,11 +8,13 @@ from src.schemas.common import PaginatedResponse
 from src.schemas.user import (
     UserCategoryCreate,
     UserCategoryOut,
+    UserCategoryUpdate,
     UserCreate,
     UserListOut,
     UserOut,
     UserTypeCreate,
     UserTypeOut,
+    UserTypeUpdate,
     UserUpdate,
 )
 from src.services.user_service import UserService
@@ -25,6 +27,9 @@ async def list_users(
     category_id: Optional[int] = Query(None),
     type_id: Optional[int] = Query(None),
     search: Optional[str] = Query(None, max_length=100),
+    has_analytics: Optional[bool] = Query(None),
+    sort_by: str = Query("id", pattern="^(id|name|phone_number|calls_count|created_at)$"),
+    sort_order: Literal["asc", "desc"] = Query("desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     session: AsyncSession = Depends(get_db),
@@ -34,6 +39,9 @@ async def list_users(
         category_id=category_id,
         type_id=type_id,
         search=search,
+        has_analytics=has_analytics,
+        sort_by=sort_by,
+        sort_order=sort_order,
         page=page,
         page_size=page_size,
     )
@@ -60,6 +68,11 @@ async def update_user(user_id: int, data: UserUpdate, session: AsyncSession = De
     return UserOut.model_validate(await UserService(session).update_user(user_id, data))
 
 
+@users_router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int, session: AsyncSession = Depends(get_db)):
+    await UserService(session).delete_user(user_id)
+
+
 # ── Categories ────────────────────────────────────────────────────────────────
 
 @users_router.get("/categories/list", response_model=list[UserCategoryOut])
@@ -72,6 +85,16 @@ async def create_category(data: UserCategoryCreate, session: AsyncSession = Depe
     return UserCategoryOut.model_validate(await UserService(session).create_category(data.name))
 
 
+@users_router.patch("/categories/{category_id}", response_model=UserCategoryOut)
+async def update_category(category_id: int, data: UserCategoryUpdate, session: AsyncSession = Depends(get_db)):
+    return UserCategoryOut.model_validate(await UserService(session).update_category(category_id, data.name))
+
+
+@users_router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(category_id: int, session: AsyncSession = Depends(get_db)):
+    await UserService(session).delete_category(category_id)
+
+
 # ── Types ─────────────────────────────────────────────────────────────────────
 
 @users_router.get("/types/list", response_model=list[UserTypeOut])
@@ -82,3 +105,13 @@ async def list_types(session: AsyncSession = Depends(get_db)):
 @users_router.post("/types", response_model=UserTypeOut, status_code=status.HTTP_201_CREATED)
 async def create_type(data: UserTypeCreate, session: AsyncSession = Depends(get_db)):
     return UserTypeOut.model_validate(await UserService(session).create_type(data.name))
+
+
+@users_router.patch("/types/{type_id}", response_model=UserTypeOut)
+async def update_type(type_id: int, data: UserTypeUpdate, session: AsyncSession = Depends(get_db)):
+    return UserTypeOut.model_validate(await UserService(session).update_type(type_id, data.name))
+
+
+@users_router.delete("/types/{type_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_type(type_id: int, session: AsyncSession = Depends(get_db)):
+    await UserService(session).delete_type(type_id)

@@ -11,6 +11,10 @@ class UserCategoryCreate(UserCategoryBase):
     pass
 
 
+class UserCategoryUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50)
+
+
 class UserCategoryOut(UserCategoryBase):
     id: int
 
@@ -23,6 +27,10 @@ class UserTypeBase(BaseModel):
 
 class UserTypeCreate(UserTypeBase):
     pass
+
+
+class UserTypeUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50)
 
 
 class UserTypeOut(UserTypeBase):
@@ -74,5 +82,6 @@ class UserListOut(BaseModel):
     name: Optional[str]
     calls_count: int
     category: Optional[UserCategoryOut] = None
+    types: List[UserTypeOut] = []
 
     model_config = {"from_attributes": True}

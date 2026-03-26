@@ -6,13 +6,13 @@ Rules:
 - All methods accept an AsyncSession and return ORM objects or scalars.
 - No session management (commit/rollback) — that is the service's responsibility.
 """
-from typing import List, Optional, Tuple
-from sqlalchemy import func, select, update
+from typing import List, Literal, Optional, Tuple
+from sqlalchemy import asc, delete, desc, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.models import User, UserCategory, UserType, user_type_association
+from db.models import Call, CallAiAnalytic, User, UserCategory, UserType, user_type_association
 
 
 class UserRepository:
@@ -62,12 +62,21 @@ class UserRepository:
         await self._s.flush()
         return user
 
+    async def delete(self, user_id: int) -> bool:
+        result = await self._s.execute(
+            delete(User).where(User.id == user_id)
+        )
+        return result.rowcount > 0
+
     async def list_with_filters(
         self,
         *,
         category_id: Optional[int] = None,
         type_id: Optional[int] = None,
         search: Optional[str] = None,
+        has_analytics: Optional[bool] = None,
+        sort_by: str = "id",
+        sort_order: Literal["asc", "desc"] = "desc",
         offset: int = 0,
         limit: int = 20,
     ) -> Tuple[List[User], int]:
@@ -100,9 +109,43 @@ class UserRepository:
                 User.phone_number.ilike(pattern) | User.name.ilike(pattern)
             )
 
+        if has_analytics is True:
+            analytics_subq = (
+                select(CallAiAnalytic.call_id)
+                .join(Call, Call.id == CallAiAnalytic.call_id)
+                .where(Call.user_id == User.id)
+                .correlate(User)
+                .exists()
+            )
+            base_q = base_q.where(analytics_subq)
+            count_q = count_q.where(analytics_subq)
+        elif has_analytics is False:
+            analytics_subq = (
+                select(CallAiAnalytic.call_id)
+                .join(Call, Call.id == CallAiAnalytic.call_id)
+                .where(Call.user_id == User.id)
+                .correlate(User)
+                .exists()
+            )
+            base_q = base_q.where(~analytics_subq)
+            count_q = count_q.where(~analytics_subq)
+
+        # Sort column mapping
+        sort_col_map = {
+            "id": User.id,
+            "name": User.name,
+            "phone_number": User.phone_number,
+            "calls_count": User.calls_count,
+            "created_at": User.created_at,
+        }
+        sort_col = sort_col_map.get(sort_by, User.id)
+        order_fn = desc if sort_order == "desc" else asc
+
         total = (await self._s.execute(count_q)).scalar_one()
         users = (
-            await self._s.execute(base_q.order_by(User.id.desc()).offset(offset).limit(limit))
+            await self._s.execute(
+                base_q.order_by(order_fn(sort_col)).offset(offset).limit(limit)
+            )
         ).scalars().all()
 
         return list(users), total
@@ -149,6 +192,20 @@ class UserRepository:
         await self._s.flush()
         return cat
 
+    async def update_category(self, category_id: int, name: str) -> Optional[UserCategory]:
+        cat = await self.get_category(category_id)
+        if not cat:
+            return None
+        cat.name = name
+        await self._s.flush()
+        return cat
+
+    async def delete_category(self, category_id: int) -> bool:
+        result = await self._s.execute(
+            delete(UserCategory).where(UserCategory.id == category_id)
+        )
+        return result.rowcount > 0
+
     # ── UserType ──────────────────────────────────────────────────────────────
 
     async def list_types(self) -> List[UserType]:
@@ -164,3 +221,17 @@ class UserRepository:
         self._s.add(t)
         await self._s.flush()
         return t
+
+    async def update_type(self, type_id: int, name: str) -> Optional[UserType]:
+        t = await self.get_type(type_id)
+        if not t:
+            return None
+        t.name = name
+        await self._s.flush()
+        return t
+
+    async def delete_type(self, type_id: int) -> bool:
+        result = await self._s.execute(
+            delete(UserType).where(UserType.id == type_id)
+        )
+        return result.rowcount > 0

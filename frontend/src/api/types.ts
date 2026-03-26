@@ -62,6 +62,7 @@ export interface UserListItem {
   name: string | null
   calls_count: number
   category: UserCategory | null
+  types: UserType[]
 }
 
 // ── Calls ─────────────────────────────────────────────────────────────────────
@@ -147,6 +148,9 @@ export interface UserFilters {
   category_id?: number
   type_id?: number
   search?: string
+  has_analytics?: boolean
+  sort_by?: 'id' | 'name' | 'phone_number' | 'calls_count' | 'created_at'
+  sort_order?: 'asc' | 'desc'
   page?: number
   page_size?: number
 }

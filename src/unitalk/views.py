@@ -2,7 +2,14 @@ from fastapi import APIRouter
 
 from src.services.call_sync_service import sync_calls
 from src.services.ai_sync_service import sync_analytics, AnalyticsSyncStats
-from src.unitalk.schemas import SyncResponse, AnalyticsSyncResponse, AnalyticsSyncStats as AnalyticsSyncStatsSchema
+from src.services.user_categorization_service import categorize_users
+from src.unitalk.schemas import (
+    SyncResponse,
+    AnalyticsSyncResponse,
+    AnalyticsSyncStats as AnalyticsSyncStatsSchema,
+    CategorizationResponse,
+    CategorizationStats as CategorizationStatsSchema,
+)
 
 unitalk_router = APIRouter(prefix="/unitalk", tags=["Unitalk Sync"])
 
@@ -44,6 +51,29 @@ async def analytics_sync_all():
     return AnalyticsSyncResponse(
         status="success",
         message=f"Аналітику зібрано: {result.saved} дзвінків збережено з {result.total_scraped} знайдених",
+        stats=stats_schema,
+    )
+
+
+@unitalk_router.post("/users/categorize", response_model=CategorizationResponse)
+async def categorize_users_endpoint():
+    """
+    Автоматично категоризує користувачів з category_id = NULL або 1 (Default)
+    через Gemini AI на основі тем їхніх дзвінків (conversation_topic).
+
+    ⚠️  Тривала операція — залежить від кількості некатегоризованих користувачів.
+    """
+    result = await categorize_users()
+    stats_schema = CategorizationStatsSchema(
+        total=result.total,
+        categorized=result.categorized,
+        skipped_no_topics=result.skipped_no_topics,
+        errors=result.errors,
+        results=result.results,
+    )
+    return CategorizationResponse(
+        status="success",
+        message=f"Категоризовано {result.categorized} з {result.total} користувачів",
         stats=stats_schema,
     )
 

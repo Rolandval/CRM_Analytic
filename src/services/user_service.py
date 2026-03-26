@@ -1,5 +1,5 @@
 """User service — business logic on top of UserRepository."""
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,9 @@ class UserService:
         category_id: Optional[int] = None,
         type_id: Optional[int] = None,
         search: Optional[str] = None,
+        has_analytics: Optional[bool] = None,
+        sort_by: str = "id",
+        sort_order: Literal["asc", "desc"] = "desc",
         page: int = 1,
         page_size: int = 20,
     ) -> Tuple[List[User], int]:
@@ -37,6 +40,9 @@ class UserService:
             category_id=category_id,
             type_id=type_id,
             search=search,
+            has_analytics=has_analytics,
+            sort_by=sort_by,
+            sort_order=sort_order,
             offset=offset,
             limit=page_size,
         )
@@ -79,6 +85,12 @@ class UserService:
         logger.info("user_updated", user_id=user_id)
         return user
 
+    async def delete_user(self, user_id: int) -> None:
+        deleted = await self._repo.delete(user_id)
+        if not deleted:
+            raise UserNotFound(f"User {user_id} not found")
+        logger.info("user_deleted", user_id=user_id)
+
     # ── Categories ────────────────────────────────────────────────────────────
 
     async def list_categories(self) -> List[UserCategory]:
@@ -89,6 +101,19 @@ class UserService:
         logger.info("category_created", name=name)
         return cat
 
+    async def update_category(self, category_id: int, name: str) -> UserCategory:
+        cat = await self._repo.update_category(category_id, name)
+        if not cat:
+            raise NotFoundError(f"Category {category_id} not found")
+        logger.info("category_updated", category_id=category_id, name=name)
+        return cat
+
+    async def delete_category(self, category_id: int) -> None:
+        deleted = await self._repo.delete_category(category_id)
+        if not deleted:
+            raise NotFoundError(f"Category {category_id} not found")
+        logger.info("category_deleted", category_id=category_id)
+
     # ── Types ─────────────────────────────────────────────────────────────────
 
     async def list_types(self) -> List[UserType]:
@@ -98,3 +123,16 @@ class UserService:
         t = await self._repo.create_type(name)
         logger.info("user_type_created", name=name)
         return t
+
+    async def update_type(self, type_id: int, name: str) -> UserType:
+        t = await self._repo.update_type(type_id, name)
+        if not t:
+            raise NotFoundError(f"UserType {type_id} not found")
+        logger.info("user_type_updated", type_id=type_id, name=name)
+        return t
+
+    async def delete_type(self, type_id: int) -> None:
+        deleted = await self._repo.delete_type(type_id)
+        if not deleted:
+            raise NotFoundError(f"UserType {type_id} not found")
+        logger.info("user_type_deleted", type_id=type_id)
