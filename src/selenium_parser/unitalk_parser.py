@@ -619,7 +619,7 @@ class UnitalkParser:
         except Exception:
             pass
 
-    def _wait_for_table(self, timeout: int = 15) -> bool:
+    def _wait_for_table(self, timeout: int = 30) -> bool:
         """Чекає завантаження таблиці дзвінків. Повертає True якщо є рядки."""
         try:
             WebDriverWait(self._driver, timeout).until(
@@ -701,7 +701,7 @@ class UnitalkParser:
 
         # Чекаємо модального вікна
         try:
-            WebDriverWait(self._driver, 10).until(
+            WebDriverWait(self._driver, 20).until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, ".MuiModal-root:not(.MuiModal-hidden) h6")
                 )
@@ -1145,7 +1145,7 @@ class UnitalkParser:
 
                 # Чекаємо модального вікна
                 try:
-                    WebDriverWait(self._driver, 10).until(
+                    WebDriverWait(self._driver, 20).until(
                         EC.presence_of_element_located(
                             (By.CSS_SELECTOR, ".MuiModal-root:not(.MuiModal-hidden) h6")
                         )
