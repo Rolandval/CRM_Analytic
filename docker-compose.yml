@@ -47,7 +47,7 @@ services:
     networks:
       - crm_network
     command: >
-      sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8668 --workers 2"
+      sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8668"
 
   # ── Frontend ──────────────────────────────────────────────────────────────────
   frontend:
