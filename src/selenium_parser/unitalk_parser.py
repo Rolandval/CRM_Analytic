@@ -1078,7 +1078,7 @@ class UnitalkParser:
 
         # Лічильник ітерацій без нових рядків
         no_new_rows_count = 0
-        max_iterations_without_new_rows = 3
+        max_iterations_without_new_rows = 15
         
         while True:
             # Рахуємо необроблені рядки
