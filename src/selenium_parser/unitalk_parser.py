@@ -565,45 +565,71 @@ class UnitalkParser:
     def _fill_segmented_date_range(self, from_dt, to_dt) -> None:
         """
         Заповнює MUI v6 segmented date inputs (кожен сегмент окремо через клавіатуру).
-        Шукає секції day/month/year всередині MuiPickersLayout.
+
+        MUI DateRangePicker v6 має два окремих DateField (start / end),
+        кожен з трьома сегментами: day → TAB → month → TAB → year.
+        Після введення year стартового поля фокус автоматично переходить
+        на day-сегмент кінцевого поля — тому набираємо всю послідовність
+        безперервно після кліку на перший сегмент.
         """
         from selenium.webdriver.common.keys import Keys
-
-        def fill_one(segments_selector: str, dt) -> bool:
-            segs = self._driver.find_elements(By.CSS_SELECTOR, segments_selector)
-            if not segs:
-                return False
-            # Клікаємо перший сегмент і набираємо DD MM YYYY
-            try:
-                segs[0].click()
-                time.sleep(0.3)
-                day_str   = dt.strftime("%d")
-                month_str = dt.strftime("%m")
-                year_str  = dt.strftime("%Y")
-                from selenium.webdriver.common.action_chains import ActionChains
-                ac = ActionChains(self._driver)
-                ac.send_keys(day_str)
-                ac.send_keys(Keys.TAB)
-                ac.send_keys(month_str)
-                ac.send_keys(Keys.TAB)
-                ac.send_keys(year_str)
-                ac.perform()
-                time.sleep(0.5)
-                return True
-            except Exception as e:
-                logger.warning("unitalk_parser.filter.segmented_fill_error", error=str(e))
-                return False
-
-        # Спроба: знайти два MuiDateField або схожі секції
-        picker = ".MuiPickersLayout-root "
-        fill_one(picker + "[data-segment], [contenteditable='true']", from_dt)
-        time.sleep(0.5)
-        # Перемикаємо фокус на другий field (Tab)
         from selenium.webdriver.common.action_chains import ActionChains
-        ActionChains(self._driver).send_keys(Keys.TAB).perform()
-        time.sleep(0.3)
-        fill_one(picker + "[data-segment]:nth-of-type(4)", to_dt)
+
+        # Знаходимо перший segment-span всередині picker
+        picker_segs = self._driver.find_elements(
+            By.CSS_SELECTOR,
+            ".MuiPickersLayout-root [data-segment]",
+        )
+        if not picker_segs:
+            picker_segs = self._driver.find_elements(
+                By.CSS_SELECTOR,
+                ".MuiPickersLayout-root [contenteditable='true']",
+            )
+        if not picker_segs:
+            logger.warning("unitalk_parser.filter.segmented_no_segments")
+            return
+
+        try:
+            picker_segs[0].click()
+            time.sleep(0.4)
+        except Exception as exc:
+            logger.warning("unitalk_parser.filter.segmented_click_error", error=str(exc))
+            return
+
+        # Набираємо: from DD TAB MM TAB YYYY  →  (авто-перехід)  to DD TAB MM TAB YYYY
+        ac = ActionChains(self._driver)
+        ac.send_keys(from_dt.strftime("%d"))
+        ac.send_keys(Keys.TAB)
+        ac.send_keys(from_dt.strftime("%m"))
+        ac.send_keys(Keys.TAB)
+        ac.send_keys(from_dt.strftime("%Y"))
+        # Після року from-поля фокус переходить на day to-поля автоматично
+        ac.send_keys(to_dt.strftime("%d"))
+        ac.send_keys(Keys.TAB)
+        ac.send_keys(to_dt.strftime("%m"))
+        ac.send_keys(Keys.TAB)
+        ac.send_keys(to_dt.strftime("%Y"))
+        ac.perform()
         time.sleep(1)
+
+        # Підтверджуємо кнопкою Apply або Enter
+        confirmed = self._driver_js("""
+            var picker = document.querySelector('.MuiPickersLayout-root');
+            if (!picker) return null;
+            var btns = Array.prototype.slice.call(picker.querySelectorAll('button'));
+            var applyBtn = btns.find(function(b) {
+                var t = (b.textContent || '').trim().toLowerCase();
+                return t === 'apply' || t === 'застосувати' || t === 'ok' || t === 'підтвердити';
+            });
+            if (applyBtn) { applyBtn.click(); return 'apply_btn'; }
+            return null;
+        """)
+        if not confirmed:
+            self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.RETURN)
+            logger.info("unitalk_parser.filter.segmented_enter")
+        else:
+            logger.info("unitalk_parser.filter.segmented_applied", method=confirmed)
+        time.sleep(2)
 
     def _remove_new_leads_filter(self) -> None:
         """Знімає фільтр 'Only new leads' щоб бачити всі дзвінки."""
