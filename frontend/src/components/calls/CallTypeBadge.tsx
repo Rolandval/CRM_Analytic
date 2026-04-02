@@ -3,16 +3,19 @@ import type { CallType } from '../../api/types'
 
 export function CallTypeBadge({ type }: { type: CallType | null }) {
   if (!type) return null
+
   if (type === 'IN') {
     return (
-      <span className="badge bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 gap-1">
-        <PhoneIncoming size={11} /> Inbound
+      <span className="badge" style={{ background: 'rgba(99,102,241,0.10)', color: '#4338ca' }}>
+        <PhoneIncoming size={11} strokeWidth={2.5} />
+        Inbound
       </span>
     )
   }
   return (
-    <span className="badge bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-300 gap-1">
-      <PhoneOutgoing size={11} /> Outbound
+    <span className="badge" style={{ background: 'rgba(139,92,246,0.10)', color: '#6d28d9' }}>
+      <PhoneOutgoing size={11} strokeWidth={2.5} />
+      Outbound
     </span>
   )
 }

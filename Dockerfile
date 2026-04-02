@@ -17,10 +17,12 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # libpq5 — PostgreSQL client; chromium + chromedriver — для Selenium-парсера
+# xvfb — virtual framebuffer: дозволяє non-headless Chrome в Docker без фізичного дисплею
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     chromium \
     chromium-driver \
+    xvfb \
     fonts-liberation \
     libnss3 \
     libasound2 \
@@ -40,7 +42,7 @@ COPY --from=builder /install /usr/local
 COPY . .
 
 # Вказуємо шляхи до chromium для Selenium (зчитується у UnitalkParser)
-ENV CHROME_BINARY=/usr/lib/chromium/chromium
+ENV CHROME_BINARY=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 # Non-root user for security

@@ -1,14 +1,39 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Phone, PhoneIncoming, PhoneOutgoing, Clock, RefreshCw, Loader2 } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
+  Phone, PhoneIncoming, PhoneOutgoing, Clock,
+  RefreshCw, Loader2, CheckCircle2, Sparkles,
+} from 'lucide-react'
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 import { callsApi } from '../api/calls'
 import { StatCard } from '../components/ui/StatCard'
 import { PageSpinner } from '../components/ui/Spinner'
 
-const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#ef4444', '#f59e0b']
+const STATE_CFG: Record<string, { color: string; label: string }> = {
+  ANSWER:   { color: '#10b981', label: 'Answered'  },
+  NOANSWER: { color: '#94a3b8', label: 'No Answer' },
+  BUSY:     { color: '#f59e0b', label: 'Busy'      },
+  FAILED:   { color: '#f43f5e', label: 'Failed'    },
+}
+
+function formatSeconds(s: number) {
+  if (!s) return '0s'
+  const m = Math.floor(s / 60)
+  const sec = Math.round(s % 60)
+  return m ? `${m}m ${sec}s` : `${sec}s`
+}
+
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { name: string } }> }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white rounded-xl px-3.5 py-2.5 shadow-popover border border-black/[0.06]">
+      <p className="text-xs text-slate-500 mb-0.5">{payload[0].payload.name}</p>
+      <p className="text-sm font-bold text-slate-900">{payload[0].value.toLocaleString()}</p>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const { data: stats, isLoading } = useQuery({
@@ -17,22 +42,42 @@ export default function DashboardPage() {
     refetchInterval: 60_000,
   })
 
-  const syncMutation = useMutation({
-    mutationFn: callsApi.syncToday,
-  })
+  const syncMutation = useMutation({ mutationFn: callsApi.syncToday })
 
   if (isLoading) return <PageSpinner />
 
-  const stateData = Object.entries(stats?.by_state ?? {}).map(([name, value]) => ({ name, value }))
-  const typeData = Object.entries(stats?.by_type ?? {}).map(([name, value]) => ({ name, value }))
+  const stateData = Object.entries(stats?.by_state ?? {}).map(([key, value]) => ({
+    key,
+    name: STATE_CFG[key]?.label ?? key,
+    value,
+    color: STATE_CFG[key]?.color ?? '#94a3b8',
+  }))
+
+  const typeData = [
+    {
+      name: 'Inbound',
+      value: stats?.by_type?.IN ?? stats?.by_type?.['CallType.INB'] ?? 0,
+    },
+    {
+      name: 'Outbound',
+      value: stats?.by_type?.OUT ?? stats?.by_type?.['CallType.OUT'] ?? 0,
+    },
+  ]
+
+  const total = stats?.total ?? 0
+  const answered = stats?.by_state?.ANSWER ?? 0
+  const answerRate = total > 0 ? Math.round((answered / total) * 100) : 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-slide-up">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Call center analytics overview</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <span className="text-gradient">Dashboard</span>
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">Call center analytics overview</p>
         </div>
         <button
           className="btn-primary"
@@ -40,72 +85,147 @@ export default function DashboardPage() {
           disabled={syncMutation.isPending}
         >
           {syncMutation.isPending
-            ? <Loader2 size={16} className="animate-spin" />
-            : <RefreshCw size={16} />
+            ? <Loader2 size={15} className="animate-spin" />
+            : <RefreshCw size={15} />
           }
           Sync today
         </button>
       </div>
 
+      {/* Sync success */}
       {syncMutation.isSuccess && (
-        <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2 text-sm text-green-700 dark:text-green-300">
-          Synced {syncMutation.data.stats.total} calls — {syncMutation.data.stats.new} new, {syncMutation.data.stats.updated} updated
+        <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200/70 rounded-2xl px-5 py-3.5 text-sm text-emerald-700 animate-slide-up shadow-sm">
+          <CheckCircle2 size={16} className="flex-shrink-0" />
+          <span>
+            Synced <strong>{syncMutation.data.stats.total}</strong> calls —{' '}
+            <strong>{syncMutation.data.stats.new} new</strong>, {syncMutation.data.stats.updated} updated
+          </span>
         </div>
       )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total calls"
-          value={stats?.total.toLocaleString() ?? '—'}
-          icon={<Phone size={20} />}
-          color="bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
+          label="Total Calls"
+          value={total.toLocaleString()}
+          icon={<Phone size={18} strokeWidth={2.5} />}
+          gradient="linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)"
         />
         <StatCard
           label="Inbound"
-          value={stats?.by_type?.['CallType.INB']?.toLocaleString() ?? stats?.by_type?.IN?.toLocaleString() ?? '—'}
-          icon={<PhoneIncoming size={20} />}
-          color="bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400"
+          value={(stats?.by_type?.IN ?? stats?.by_type?.['CallType.INB'] ?? 0).toLocaleString()}
+          icon={<PhoneIncoming size={18} strokeWidth={2.5} />}
+          gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
         />
         <StatCard
           label="Outbound"
-          value={stats?.by_type?.['CallType.OUT']?.toLocaleString() ?? stats?.by_type?.OUT?.toLocaleString() ?? '—'}
-          icon={<PhoneOutgoing size={20} />}
-          color="bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400"
+          value={(stats?.by_type?.OUT ?? stats?.by_type?.['CallType.OUT'] ?? 0).toLocaleString()}
+          icon={<PhoneOutgoing size={18} strokeWidth={2.5} />}
+          gradient="linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)"
         />
         <StatCard
-          label="Avg talk time"
-          value={`${Math.round(stats?.avg_talk_duration_seconds ?? 0)}s`}
-          icon={<Clock size={20} />}
-          color="bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400"
+          label="Avg Talk Time"
+          value={formatSeconds(stats?.avg_talk_duration_seconds ?? 0)}
+          icon={<Clock size={18} strokeWidth={2.5} />}
+          gradient="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
         />
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <h2 className="text-sm font-semibold mb-4">Calls by State</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={stateData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
-                {stateData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+
+        {/* Donut chart */}
+        <div className="card p-6 lg:col-span-3">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h2 className="font-bold text-slate-900 text-base">Calls by State</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Distribution of call outcomes</p>
+            </div>
+            <div
+              className="flex items-center gap-1.5 text-sm font-bold px-3.5 py-2 rounded-xl"
+              style={{
+                background: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.08))',
+                color: '#065f46',
+              }}
+            >
+              <Sparkles size={13} />
+              {answerRate}% answered
+            </div>
+          </div>
+
+          <div className="flex items-center gap-8">
+            <ResponsiveContainer width={200} height={200}>
+              <PieChart>
+                <Pie
+                  data={stateData}
+                  cx="50%" cy="50%"
+                  innerRadius={60} outerRadius={90}
+                  paddingAngle={4}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {stateData.map(entry => (
+                    <Cell key={entry.key} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+
+            {/* Legend */}
+            <div className="flex-1 space-y-3">
+              {stateData.map(entry => (
+                <div key={entry.key} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                         style={{ background: entry.color }} />
+                    <span className="text-sm text-slate-600 font-medium">{entry.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-slate-900">{entry.value.toLocaleString()}</span>
+                    {total > 0 && (
+                      <span className="text-xs text-slate-400">
+                        {Math.round((entry.value / total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="card p-5">
-          <h2 className="text-sm font-semibold mb-4">Calls by Type</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={typeData} barSize={40}>
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+        {/* Bar chart */}
+        <div className="card p-6 lg:col-span-2">
+          <div className="mb-6">
+            <h2 className="font-bold text-slate-900 text-base">Calls by Type</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Inbound vs outbound volume</p>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={typeData} barSize={52} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradIn" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366f1" />
+                  <stop offset="100%" stopColor="#3b82f6" />
+                </linearGradient>
+                <linearGradient id="gradOut" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#8b5cf6" />
+                  <stop offset="100%" stopColor="#7c3aed" />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 500 }}
+                     axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)', radius: 8 }} />
+              <Bar dataKey="value" radius={[10, 10, 4, 4]}>
+                <Cell fill="url(#gradIn)" />
+                <Cell fill="url(#gradOut)" />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
+
       </div>
     </div>
   )

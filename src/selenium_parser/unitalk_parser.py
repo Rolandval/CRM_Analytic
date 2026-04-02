@@ -33,6 +33,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from core.logging import get_logger
 
+try:
+    from pyvirtualdisplay import Display as _VirtualDisplay
+    _HAS_PYVD = True
+except ImportError:
+    _HAS_PYVD = False
+
 logger = get_logger(__name__)
 
 # ── Константи сайту ────────────────────────────────────────────────────────────
@@ -204,22 +210,90 @@ class UnitalkParser:
         self.page_load_timeout = page_load_timeout
         self.wait_timeout = element_wait_timeout
         self._driver: Optional[webdriver.Chrome] = None
+        self._vdisplay = None  # pyvirtualdisplay.Display instance (non-headless Docker)
 
     # ── Driver ─────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _display_is_usable() -> bool:
+        """Повертає True тільки якщо DISPLAY вказує на справжній X11-сервер."""
+        display = os.environ.get("DISPLAY", "")
+        if not display:
+            return False
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["xdpyinfo", "-display", display],
+                capture_output=True, timeout=2,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def _ensure_display(self) -> None:
+        """
+        Якщо headless=False і реального X11 немає — запускає Xvfb через
+        pyvirtualdisplay, щоб Chrome міг відкрити вікно без фізичного монітора.
+
+        Важливо: перевіряємо реальну доступність дисплею через xdpyinfo,
+        бо в Docker DISPLAY може бути встановлений (напр. :0) але неробочим.
+        """
+        if self.headless:
+            return
+        if self._vdisplay is not None:
+            return  # вже запущений
+        if self._display_is_usable():
+            logger.info("unitalk_parser.display.real_x11_found",
+                        display=os.environ.get("DISPLAY"))
+            return
+        if not _HAS_PYVD:
+            logger.warning("unitalk_parser.display.pyvirtualdisplay_missing",
+                           hint="pip install pyvirtualdisplay + apt install xvfb")
+            return
+        try:
+            self._vdisplay = _VirtualDisplay(visible=False, size=(1920, 1080), color_depth=24)
+            self._vdisplay.start()
+            logger.info("unitalk_parser.display.xvfb_started",
+                        display=os.environ.get("DISPLAY", "unknown"))
+        except Exception as exc:
+            logger.warning("unitalk_parser.display.xvfb_failed", error=str(exc))
+            self._vdisplay = None
 
     def _build_driver(self) -> webdriver.Chrome:
         options = Options()
         if self.headless:
             options.add_argument("--headless=new")
+
+        # ── Обов'язково для Docker (будь-який режим) ────────────────────────────
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-setuid-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")          # потрібно і в Docker non-headless
+        options.add_argument("--disable-dev-shm-usage")   # уникаємо OOM в /dev/shm
+        options.add_argument("--disable-gpu")
         options.add_argument("--disable-software-rasterizer")
         options.add_argument("--window-size=1920,1080")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
+
+        # ── Стабільність (НЕ використовуємо --single-process: він викликає SIGSEGV
+        #    в Chromium 120+ і є офіційно deprecated) ────────────────────────────
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--disable-background-timer-throttling")
+        options.add_argument("--disable-backgrounding-occluded-windows")
+        options.add_argument("--disable-renderer-backgrounding")
+        options.add_argument("--disable-ipc-flooding-protection")
+        options.add_argument("--disable-hang-monitor")
+        options.add_argument("--disable-prompt-on-repost")
+        options.add_argument("--metrics-recording-only")
+        options.add_argument("--no-first-run")
+        options.add_argument("--safebrowsing-disable-auto-update")
+
+        # ── Anti-bot (тільки в non-headless, в headless → несумісно з деякими версіями)
+        if not self.headless:
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            try:
+                options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                options.add_experimental_option("useAutomationExtension", False)
+            except Exception:
+                pass
 
         chrome_binary = os.getenv("CHROME_BINARY", "")
         chromedriver_path = os.getenv("CHROMEDRIVER_PATH", "")
@@ -238,9 +312,12 @@ class UnitalkParser:
 
         driver = webdriver.Chrome(service=service, options=options)
         driver.set_page_load_timeout(self.page_load_timeout)
-        driver.execute_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
+        try:
+            driver.execute_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+        except Exception:
+            pass
         return driver
 
     def _driver_js(self, script: str, *args):
@@ -253,6 +330,12 @@ class UnitalkParser:
             except Exception:
                 pass
             self._driver = None
+        if self._vdisplay is not None:
+            try:
+                self._vdisplay.stop()
+            except Exception:
+                pass
+            self._vdisplay = None
 
     def _screenshot(self, name: str) -> None:
         try:
@@ -267,6 +350,7 @@ class UnitalkParser:
     def login(self) -> None:
         """Авторизується на my.unitalk.cloud."""
         if self._driver is None:
+            self._ensure_display()
             self._driver = self._build_driver()
 
         logger.info("unitalk_parser.login.start")
@@ -473,7 +557,7 @@ class UnitalkParser:
         )
         if custom_li:
             ActionChains(self._driver).move_to_element(custom_li).click().perform()
-            time.sleep(1.5)
+            time.sleep(2.5)  # чекаємо перехід від списку пресетів до date-input view
             logger.info("unitalk_parser.filter.custom_preset_clicked", text=custom_li.text.strip())
 
         # Формати дати для Unitalk: "DD.MM.YYYY" (укр.) або "MM/DD/YYYY" (англ.)
@@ -482,11 +566,23 @@ class UnitalkParser:
         from_us = from_dt.strftime("%m/%d/%Y")
         to_us = to_dt.strftime("%m/%d/%Y")
 
-        # ── Крок 2: шукаємо text inputs у picker і заповнюємо через React setter ─
+        # ── Крок 2: шукаємо text inputs у picker або на сторінці (React setter) ──
         filled = self._driver_js("""
+            // Шукаємо спочатку всередині picker, потім по всій сторінці
             var picker = document.querySelector('.MuiPickersLayout-root');
-            if (!picker) return 'no_picker';
-            var inputs = Array.prototype.slice.call(picker.querySelectorAll('input'));
+            var inputs = picker
+                ? Array.prototype.slice.call(picker.querySelectorAll('input[type="text"], input:not([type])'))
+                : [];
+            if (!inputs.length) {
+                // Широкий пошук: date-range inputs можуть бути за межами MuiPickersLayout
+                inputs = Array.prototype.slice.call(
+                    document.querySelectorAll(
+                        '.MuiDateRangePickerToolbar-root input, ' +
+                        '.MuiMultiInputDateRangeField-root input, ' +
+                        '.MuiDateField-root input'
+                    )
+                );
+            }
             if (!inputs.length) return 'no_inputs';
 
             function setReact(inp, val) {
@@ -504,7 +600,6 @@ class UnitalkParser:
                 setReact(inputs[1], arguments[1]);
                 return 'ok:2inputs';
             }
-            // Один input — пробуємо "from - to" формат
             setReact(inputs[0], arguments[0] + ' - ' + arguments[1]);
             return 'ok:1input';
         """, from_ua, to_ua)
@@ -564,46 +659,74 @@ class UnitalkParser:
 
     def _fill_segmented_date_range(self, from_dt, to_dt) -> None:
         """
-        Заповнює MUI v6 segmented date inputs (кожен сегмент окремо через клавіатуру).
+        Заповнює MUI X date range picker (v5/v6/v7) через клавіатуру.
 
-        MUI DateRangePicker v6 має два окремих DateField (start / end),
-        кожен з трьома сегментами: day → TAB → month → TAB → year.
+        MUI X v6/v7: сегменти = <span role="spinbutton"> або <span data-sectiontype>
+        MUI X v5:    сегменти = <input type="text"> або [data-segment]
+
         Після введення year стартового поля фокус автоматично переходить
-        на day-сегмент кінцевого поля — тому набираємо всю послідовність
-        безперервно після кліку на перший сегмент.
+        на day-сегмент кінцевого поля — набираємо обидві дати як один потік.
         """
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
 
-        # Знаходимо перший segment-span всередині picker
-        picker_segs = self._driver.find_elements(
-            By.CSS_SELECTOR,
-            ".MuiPickersLayout-root [data-segment]",
-        )
-        if not picker_segs:
-            picker_segs = self._driver.find_elements(
-                By.CSS_SELECTOR,
-                ".MuiPickersLayout-root [contenteditable='true']",
+        # Чекаємо трохи — "Custom" може ще рендеритись
+        time.sleep(0.8)
+
+        # Пробуємо селектори від найновішого MUI X до найстарішого.
+        # Спочатку ищемо всередині picker, якщо не знайшли — по всій сторінці.
+        SELECTORS = [
+            # MUI X v6/v7 — spinbutton spans
+            (".MuiPickersLayout-root span[role='spinbutton']",   "picker_spinbutton_v6"),
+            # MUI X v6 — data-sectiontype attribute
+            (".MuiPickersLayout-root [data-sectiontype]",        "picker_sectiontype_v6"),
+            # Широкий пошук по всій сторінці (якщо picker виходить за межі layout)
+            ("span[role='spinbutton']",                          "page_spinbutton"),
+            ("[data-sectiontype]",                               "page_sectiontype"),
+            # MUI X v5 / старі версії
+            (".MuiPickersLayout-root [data-segment]",            "picker_segment_v5"),
+            (".MuiPickersLayout-root [contenteditable='true']",  "picker_contenteditable"),
+        ]
+
+        first_seg = None
+        found_label = None
+        for sel, label in SELECTORS:
+            segs = self._driver.find_elements(By.CSS_SELECTOR, sel)
+            if segs:
+                first_seg = segs[0]
+                found_label = label
+                logger.info("unitalk_parser.filter.segmented_found",
+                            selector=label, count=len(segs))
+                break
+
+        if first_seg is None:
+            # Скріншот для діагностики + логування поточного HTML picker
+            self._screenshot("segmented_no_segs")
+            picker_html = self._driver_js(
+                "var p=document.querySelector('.MuiPickersLayout-root');"
+                "return p ? p.innerHTML.substring(0,2000) : 'NO_PICKER';"
             )
-        if not picker_segs:
-            logger.warning("unitalk_parser.filter.segmented_no_segments")
+            logger.warning("unitalk_parser.filter.segmented_no_segments",
+                           picker_html_preview=str(picker_html)[:500])
             return
 
         try:
-            picker_segs[0].click()
+            first_seg.click()
             time.sleep(0.4)
         except Exception as exc:
             logger.warning("unitalk_parser.filter.segmented_click_error", error=str(exc))
             return
 
-        # Набираємо: from DD TAB MM TAB YYYY  →  (авто-перехід)  to DD TAB MM TAB YYYY
+        # Набираємо обидві дати в один ActionChains:
+        # from: DD → TAB → MM → TAB → YYYY
+        # to:   DD → TAB → MM → TAB → YYYY
+        # (після YYYY from-поля MUI X автоматично переводить фокус на to-поле)
         ac = ActionChains(self._driver)
         ac.send_keys(from_dt.strftime("%d"))
         ac.send_keys(Keys.TAB)
         ac.send_keys(from_dt.strftime("%m"))
         ac.send_keys(Keys.TAB)
         ac.send_keys(from_dt.strftime("%Y"))
-        # Після року from-поля фокус переходить на day to-поля автоматично
         ac.send_keys(to_dt.strftime("%d"))
         ac.send_keys(Keys.TAB)
         ac.send_keys(to_dt.strftime("%m"))
@@ -611,6 +734,11 @@ class UnitalkParser:
         ac.send_keys(to_dt.strftime("%Y"))
         ac.perform()
         time.sleep(1)
+
+        logger.info("unitalk_parser.filter.segmented_typed",
+                    selector=found_label,
+                    from_date=from_dt.strftime("%d.%m.%Y"),
+                    to_date=to_dt.strftime("%d.%m.%Y"))
 
         # Підтверджуємо кнопкою Apply або Enter
         confirmed = self._driver_js("""
@@ -1169,18 +1297,22 @@ class UnitalkParser:
                 else:
                     analytic.call_date = date_label
 
-                # Чекаємо модального вікна
+                # Чекаємо модального вікна (макс 8 сек — Unitalk іноді не прораховує
+                # аналітику для конкретного дзвінка, в такому разі модалка не відкривається.
+                # Таймаут 20 сек × 28 рядків на сторінці = 9 хвилин зависання)
                 try:
-                    WebDriverWait(self._driver, 20).until(
+                    WebDriverWait(self._driver, 8).until(
                         EC.presence_of_element_located(
                             (By.CSS_SELECTOR, ".MuiModal-root:not(.MuiModal-hidden) h6")
                         )
                     )
                 except TimeoutException:
                     analytic.parse_error = "modal_timeout"
-                    stats.errors += 1
-                    logger.warning("unitalk_parser.parse.modal_timeout",
-                                   from_num=analytic.from_number, date=date_label)
+                    stats.skipped_no_analytics += 1
+                    logger.debug("unitalk_parser.parse.modal_timeout",
+                                 from_num=analytic.from_number, date=date_label)
+                    # Переконуємось що модалка не зависла у фоні
+                    self._close_modal()
                     stats.results.append(analytic)
                     continue
 

@@ -35,6 +35,7 @@ slowapi==0.1.9
 # ── Selenium web parser ────────────────────────────────────────────────────────
 selenium==4.27.1
 webdriver-manager==4.0.2   # Для локальної розробки (автозавантаження chromedriver)
+pyvirtualdisplay==3.0       # Xvfb-обгортка: дозволяє non-headless Chrome в Docker
 
 # ── AI / Gemini ────────────────────────────────────────────────────────────────
 google-generativeai==0.8.3

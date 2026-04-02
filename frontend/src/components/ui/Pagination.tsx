@@ -10,26 +10,70 @@ interface Props {
 export function Pagination({ page, pages, total, onPage }: Props) {
   if (pages <= 1) return null
 
+  const getPages = (): (number | '...')[] => {
+    const delta = 2
+    const range: (number | '...')[] = [1]
+    const left = Math.max(2, page - delta)
+    const right = Math.min(pages - 1, page + delta)
+
+    if (left > 2) range.push('...')
+    for (let i = left; i <= right; i++) range.push(i)
+    if (right < pages - 1) range.push('...')
+    if (pages > 1) range.push(pages)
+    return range
+  }
+
   return (
-    <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400 mt-4">
-      <span>{total} total</span>
-      <div className="flex items-center gap-1">
+    <div className="flex items-center justify-between mt-5 animate-fade-in">
+      <span className="text-sm text-slate-400 font-medium">
+        {total.toLocaleString()} records
+      </span>
+
+      <div className="flex items-center gap-1.5">
         <button
-          className="btn-ghost px-2 py-1"
           onClick={() => onPage(page - 1)}
           disabled={page <= 1}
+          className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500
+                     bg-white border border-black/[0.07] shadow-card
+                     hover:bg-slate-50 hover:shadow-card-hover
+                     disabled:opacity-30 disabled:cursor-not-allowed
+                     transition-all duration-150"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={15} />
         </button>
-        <span className="px-3 py-1 text-slate-700 dark:text-slate-200 font-medium">
-          {page} / {pages}
-        </span>
+
+        {getPages().map((p, i) =>
+          p === '...' ? (
+            <span key={`d${i}`} className="w-9 h-9 flex items-center justify-center text-slate-400 text-sm">
+              ·····
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPage(p as number)}
+              className={`w-9 h-9 flex items-center justify-center rounded-xl text-sm font-semibold
+                          transition-all duration-150 ${
+                p === page
+                  ? 'text-white shadow-btn-glow-sm scale-105'
+                  : 'text-slate-600 bg-white border border-black/[0.07] shadow-card hover:bg-slate-50 hover:shadow-card-hover'
+              }`}
+              style={p === page ? { background: 'linear-gradient(135deg, #6366f1, #3b82f6)' } : {}}
+            >
+              {p}
+            </button>
+          )
+        )}
+
         <button
-          className="btn-ghost px-2 py-1"
           onClick={() => onPage(page + 1)}
           disabled={page >= pages}
+          className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500
+                     bg-white border border-black/[0.07] shadow-card
+                     hover:bg-slate-50 hover:shadow-card-hover
+                     disabled:opacity-30 disabled:cursor-not-allowed
+                     transition-all duration-150"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={15} />
         </button>
       </div>
     </div>
