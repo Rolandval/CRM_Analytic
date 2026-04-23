@@ -33,6 +33,9 @@ class CallState(str, Enum):
     NOANSWER = "NOANSWER"
     BUSY = "BUSY"
     FAILED = "FAILED"
+    FAIL = "FAIL"  # Додано: статус з Unitalk
+    CHANUNAVAIL = "CHANUNAVAIL"  # Додано: канал недоступний
+    NOMONEY = "NOMONEY"  # Додано: недостатньо коштів
 
 
 class CallType(str, Enum):
@@ -146,8 +149,8 @@ class Call(Base):
     user_id: Mapped[int | None] = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    from_number: Mapped[str | None] = Column(String(25), nullable=True)
-    to_number: Mapped[str | None] = Column(String(25), nullable=True)
+    from_number: Mapped[str] = Column(String(150), nullable=False)  # Збільшено для URL
+    to_number: Mapped[str] = Column(String(150), nullable=False)  # Збільшено для URL
     call_type: Mapped[CallType | None] = Column(SQLAlchemyEnum(CallType, name="calltype"), nullable=True)
     call_state: Mapped[CallState | None] = Column(SQLAlchemyEnum(CallState, name="callstate"), nullable=True)
     date: Mapped[datetime | None] = Column(DateTime(timezone=False), nullable=True)

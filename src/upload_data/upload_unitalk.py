@@ -8,6 +8,7 @@ Key fixes vs original:
 - Raises UnitalkAPIError on non-200 responses
 - Uses proper timezone-aware datetime handling
 """
+import asyncio
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -20,6 +21,35 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 PHONE_FIELDS = ("from_number", "to_number", "outer_number")
+
+# Unitalk API іноді повертає скорочені/альтернативні варіанти стану.
+# Тут нормалізуємо їх до значень enum CallState у БД.
+_STATE_ALIASES: dict[str, str] = {
+    "FAIL":        "FAILED",   # скорочення від FAILED
+    "NO_ANSWER":   "NOANSWER", # варіант з підчеркуванням
+    "NO ANSWER":   "NOANSWER",
+    "CANCEL":      "NOANSWER", # скасовані = не відповідено
+    "CANCELED":    "NOANSWER",
+    "CONGESTION":  "FAILED",   # мережева проблема
+    "CHANUNAVAIL": "FAILED",   # канал недоступний
+    "WRONGDIR":    "FAILED",   # неправильний напрямок/номер
+    "WRONGNUM":    "FAILED",
+    "INVALIDNUM":  "FAILED",
+}
+_VALID_STATES = {"ANSWER", "NOANSWER", "BUSY", "FAILED"}
+
+
+def _normalize_call_state(raw: str | None) -> str:
+    if not raw:
+        return "NOANSWER"
+    upper = raw.upper().strip()
+    if upper in _VALID_STATES:
+        return upper
+    mapped = _STATE_ALIASES.get(upper)
+    if mapped:
+        return mapped
+    logger.warning("unitalk_unknown_call_state", raw_state=raw, fallback="NOANSWER")
+    return "NOANSWER"
 
 
 async def fetch_unitalk_calls(*, today: bool = False) -> List[Dict[str, Any]]:
@@ -62,21 +92,51 @@ async def fetch_unitalk_calls(*, today: bool = False) -> List[Dict[str, Any]]:
 
             logger.debug("unitalk_page_request", offset=offset, limit=settings.unitalk_page_size)
 
-            try:
-                response = await client.post(settings.unitalk_api_url, headers=headers, json=payload)
-            except httpx.TimeoutException as exc:
-                raise UnitalkAPIError(
-                    f"Unitalk API timed out after {settings.unitalk_request_timeout}s",
-                    detail=str(exc),
-                )
-            except httpx.RequestError as exc:
-                raise UnitalkAPIError("Unitalk API connection error", detail=str(exc))
+            # ── Retry з exponential backoff для 429 (rate limit) та 5xx ────────
+            # Unitalk має агресивний rate limit: чекаємо до ~5 хвилин сумарно
+            # (15+30+60+120+120+120 ≈ 465s) перш ніж здаватись.
+            max_retries = 8
+            response = None
+            for attempt in range(max_retries):
+                try:
+                    response = await client.post(settings.unitalk_api_url, headers=headers, json=payload)
+                except httpx.TimeoutException as exc:
+                    raise UnitalkAPIError(
+                        f"Unitalk API timed out after {settings.unitalk_request_timeout}s",
+                        detail=str(exc),
+                    )
+                except httpx.RequestError as exc:
+                    raise UnitalkAPIError("Unitalk API connection error", detail=str(exc))
 
-            if response.status_code != 200:
+                if response.status_code == 200:
+                    break
+
+                if response.status_code in (429, 500, 502, 503, 504) and attempt < max_retries - 1:
+                    retry_after_hdr = response.headers.get("Retry-After")
+                    if retry_after_hdr and retry_after_hdr.isdigit():
+                        wait_s = min(int(retry_after_hdr), 120)
+                    else:
+                        # Повільніший backoff для 429: 15, 30, 60, 120, 120...
+                        base = 15 if response.status_code == 429 else 2
+                        wait_s = min(base * (2 ** attempt), 120)
+                    logger.warning(
+                        "unitalk_rate_limited",
+                        status=response.status_code,
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        wait_s=wait_s,
+                    )
+                    await asyncio.sleep(wait_s)
+                    continue
+
                 raise UnitalkAPIError(
                     f"Unitalk API returned HTTP {response.status_code}",
                     detail=response.text[:500],
                 )
+
+            # Також — невелика пауза між успішними pages, щоб не спровокувати новий 429
+            if offset > 0:
+                await asyncio.sleep(0.3)
 
             data = response.json()
             calls = data.get("calls", [])
@@ -123,7 +183,7 @@ def _transform_call(raw: Dict[str, Any]) -> Dict[str, Any] | None:
         "from_number": str(raw.get("from") or ""),
         "to_number": to_number,
         "call_type": "IN" if raw.get("direction") == "IN" else "OUT",
-        "call_state": raw.get("state", "NOANSWER"),
+        "call_state": _normalize_call_state(raw.get("state")),
         "date": call_date,
         "seconds_fulltime": float(raw.get("secondsFullTime") or 0),
         "seconds_talktime": float(raw.get("secondsTalk") or 0),
