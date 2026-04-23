@@ -34,5 +34,10 @@ class CallService:
     async def get_stats(self) -> dict:
         return await self._repo.get_stats()
 
+    async def list_all_for_export(self, filters: CallFilter, max_rows: int = 100_000) -> List[Call]:
+        """Повертає всі записи що підпадають під фільтри (обмежено max_rows)."""
+        calls, _ = await self._repo.list_with_filters(filters, offset=0, limit=max_rows)
+        return calls
+
     async def list_pending_ai(self, limit: int = 50) -> List[Call]:
         return await self._repo.list_pending_ai(limit=limit)

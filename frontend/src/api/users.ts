@@ -42,4 +42,16 @@ export const usersApi = {
 
   deleteType: (id: number) =>
     apiClient.delete(`/users/types/${id}`),
+
+  export: (format: 'csv' | 'xlsx' | 'txt', filters: Omit<UserFilters, 'page' | 'page_size'> = {}) =>
+    apiClient.get('/users/export', {
+      params: { format, ...filters },
+      responseType: 'blob',
+    }).then(r => ({ blob: r.data as Blob, filename: extractFilename(r.headers['content-disposition']) })),
+}
+
+function extractFilename(disposition: string | undefined): string {
+  if (!disposition) return 'export'
+  const m = /filename\*=UTF-8''([^;]+)/.exec(disposition) || /filename="?([^"]+)"?/.exec(disposition)
+  return m ? decodeURIComponent(m[1]) : 'export'
 }

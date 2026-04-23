@@ -12,6 +12,7 @@ import { CallStateBadge } from '../components/calls/CallStateBadge'
 import { CallTypeBadge } from '../components/calls/CallTypeBadge'
 import { Pagination } from '../components/ui/Pagination'
 import { PageSpinner } from '../components/ui/Spinner'
+import { ExportMenu, downloadBlob } from '../components/ui/ExportMenu'
 
 const STATES: { value: CallState; label: string }[] = [
   { value: 'ANSWER',   label: 'Answered' },
@@ -70,6 +71,16 @@ export default function CallsPage() {
             {data?.total != null ? `${data.total.toLocaleString()} calls in total` : 'Loading…'}
           </p>
         </div>
+        <ExportMenu
+          recordCount={data?.total}
+          onExport={async format => {
+            const { blob, filename } = await callsApi.export(format, {
+              ...filters,
+              search: search || undefined,
+            })
+            downloadBlob(blob, filename)
+          }}
+        />
       </div>
 
       {/* Search + filter toolbar */}

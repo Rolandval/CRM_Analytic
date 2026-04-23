@@ -18,4 +18,16 @@ export const callsApi = {
 
   syncToday: () =>
     apiClient.post<SyncResponse>('/unitalk/sync/today').then(r => r.data),
+
+  export: (format: 'csv' | 'xlsx' | 'txt', filters: Omit<CallFilters, 'page' | 'page_size'> = {}) =>
+    apiClient.get('/calls/export', {
+      params: { format, ...filters },
+      responseType: 'blob',
+    }).then(r => ({ blob: r.data as Blob, filename: extractFilename(r.headers['content-disposition']) })),
+}
+
+function extractFilename(disposition: string | undefined): string {
+  if (!disposition) return 'export'
+  const m = /filename\*=UTF-8''([^;]+)/.exec(disposition) || /filename="?([^"]+)"?/.exec(disposition)
+  return m ? decodeURIComponent(m[1]) : 'export'
 }

@@ -9,6 +9,7 @@ import {
 import { usersApi } from '../api/users'
 import { Pagination } from '../components/ui/Pagination'
 import { PageSpinner } from '../components/ui/Spinner'
+import { ExportMenu, downloadBlob } from '../components/ui/ExportMenu'
 import type { UserFilters } from '../api/types'
 
 type SortField = 'id' | 'name' | 'phone_number' | 'calls_count' | 'created_at'
@@ -221,6 +222,20 @@ export default function UsersPage() {
             <Users size={14} />
             Types
           </button>
+          <ExportMenu
+            recordCount={data?.total}
+            onExport={async format => {
+              const { blob, filename } = await usersApi.export(format, {
+                search: search || undefined,
+                category_id: categoryId,
+                type_id: typeId,
+                has_analytics: hasAnalytics,
+                sort_by: sortBy,
+                sort_order: sortOrder,
+              })
+              downloadBlob(blob, filename)
+            }}
+          />
         </div>
       </div>
 

@@ -47,6 +47,29 @@ class UserService:
             limit=page_size,
         )
 
+    async def list_all_for_export(
+        self,
+        *,
+        category_id: Optional[int] = None,
+        type_id: Optional[int] = None,
+        search: Optional[str] = None,
+        has_analytics: Optional[bool] = None,
+        sort_by: str = "id",
+        sort_order: Literal["asc", "desc"] = "desc",
+        max_rows: int = 100_000,
+    ) -> List[User]:
+        users, _ = await self._repo.list_with_filters(
+            category_id=category_id,
+            type_id=type_id,
+            search=search,
+            has_analytics=has_analytics,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            offset=0,
+            limit=max_rows,
+        )
+        return users
+
     async def create_user(self, data: UserCreate) -> User:
         if data.phone_number:
             existing = await self._repo.get_by_phone(data.phone_number)

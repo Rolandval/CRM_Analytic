@@ -1,6 +1,8 @@
 from typing import Literal, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import get_db
@@ -17,6 +19,7 @@ from src.schemas.user import (
     UserTypeUpdate,
     UserUpdate,
 )
+from src.services.export_service import export_users
 from src.services.user_service import UserService
 
 users_router = APIRouter(prefix="/users", tags=["Users"])
@@ -56,6 +59,35 @@ async def list_users(
 @users_router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def create_user(data: UserCreate, session: AsyncSession = Depends(get_db)):
     return UserOut.model_validate(await UserService(session).create_user(data))
+
+
+@users_router.get("/export")
+async def export_users_endpoint(
+    format: Literal["csv", "xlsx", "txt"] = Query("csv"),
+    category_id: Optional[int] = Query(None),
+    type_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None, max_length=100),
+    has_analytics: Optional[bool] = Query(None),
+    sort_by: str = Query("id", pattern="^(id|name|phone_number|calls_count|created_at)$"),
+    sort_order: Literal["asc", "desc"] = Query("desc"),
+    max_rows: int = Query(100_000, ge=1, le=500_000),
+    session: AsyncSession = Depends(get_db),
+):
+    users = await UserService(session).list_all_for_export(
+        category_id=category_id,
+        type_id=type_id,
+        search=search,
+        has_analytics=has_analytics,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        max_rows=max_rows,
+    )
+    content, mime, filename = export_users(users, format)
+    return Response(
+        content=content,
+        media_type=mime,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @users_router.get("/{user_id}", response_model=UserOut)
