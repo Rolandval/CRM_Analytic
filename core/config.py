@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from functools import lru_cache
 from typing import List
-
+from datetime import datetime
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     # ── Unitalk API ────────────────────────────────────────────────────────────
     api_token: str
     unitalk_api_url: str = "https://api.unitalk.cloud/api/history/get"
-    unitalk_sync_from_date: str = "2018-01-02 00:00:00"
-    unitalk_sync_to_date: str = "2021-01-01 00:00:00"
+    unitalk_sync_from_date: str = "2025-09-01 00:00:00"
+    unitalk_sync_to_date: str = datetime.now().strftime("%Y-%m-%d 23:59:59")
     unitalk_request_timeout: int = 60  # seconds
     unitalk_page_size: int = 1000
 

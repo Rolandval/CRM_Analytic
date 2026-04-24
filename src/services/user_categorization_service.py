@@ -18,6 +18,7 @@ from db.database import get_session
 from core.logging import get_logger
 from db.models import Call, CallAiAnalytic, User
 from src.ai.gemini_req import gemini_request
+from src.ai.ollama_req import ollama_request
 
 logger = get_logger(__name__)
 
@@ -124,7 +125,7 @@ async def categorize_users() -> CategorizationStats:
 
                 # 3. Запит до Gemini
                 prompt = _build_prompt(user.phone_number or str(user.id), topics)
-                response = await _gemini_async(prompt)
+                response = await ollama_request(prompt)
 
                 if not isinstance(response, dict) or "category_id" not in response:
                     logger.warning("user_categorization.bad_response",
